@@ -1,33 +1,30 @@
-
 import discord
 from discord.ext import commands
 import aiohttp
-import json
 import os
 import threading
 from flask import Flask, request, jsonify
 from flask_cors import CORS
+from pymongo import MongoClient
+from pymongo.errors import ConnectionFailure
 
 # --- Backend Setup ---
 
 app = Flask(__name__)
 CORS(app, origins=["https://fireboard.infy.uk"])  # Adjust your frontend URL
 
-ADS_FILE = "ads.json"
+# MongoDB setup
+MONGO_URI = os.getenv("MONGO_URI")  # Your MongoDB connection string
+mongo_client = MongoClient(MONGO_URI)
 
-# Load existing ads or initialize empty list
-if os.path.exists(ADS_FILE):
-    try:
-        with open(ADS_FILE, "r") as f:
-            ads = json.load(f)
-            if not isinstance(ads, list):
-                print("ads.json corrupted, resetting ads list")
-                ads = []
-    except Exception:
-        print("Failed to load ads.json, starting fresh")
-        ads = []
-else:
-    ads = []
+try:
+    mongo_client.admin.command('ping')
+    print("✅ Connected to MongoDB")
+except ConnectionFailure:
+    print("❌ Failed to connect to MongoDB")
+
+db = mongo_client["fireboard"]
+ads_collection = db["ads"]
 
 @app.route("/")
 def home():
@@ -35,21 +32,24 @@ def home():
 
 @app.route("/api/ads", methods=["GET", "POST"])
 def ads_route():
-    global ads
     if request.method == "POST":
         data = request.get_json()
         if not data:
             return jsonify({"error": "No data sent"}), 400
 
-        # Basic deduplication based on author_id and timestamp
-        if not any(ad.get("author_id") == data.get("author_id") and ad.get("timestamp") == data.get("timestamp") for ad in ads):
-            ads.append(data)
-            with open(ADS_FILE, "w") as f:
-                json.dump(ads, f, indent=4)
-
-        return jsonify({"status": "success"}), 200
+        # Deduplication: check if ad with same author_id and timestamp exists
+        exists = ads_collection.find_one({
+            "author_id": data.get("author_id"),
+            "timestamp": data.get("timestamp")
+        })
+        if not exists:
+            ads_collection.insert_one(data)
+            return jsonify({"status": "success"}), 200
+        else:
+            return jsonify({"status": "duplicate"}), 200
 
     else:  # GET
+        ads = list(ads_collection.find({}, {'_id': False}))
         return jsonify(ads), 200
 
 def run_flask():
@@ -86,6 +86,7 @@ intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 # Load optout list or start empty
+import json
 if os.path.exists(OPTOUT_FILE):
     try:
         with open(OPTOUT_FILE, "r") as f:
