@@ -5,7 +5,7 @@ import json
 import os
 
 TOKEN = os.getenv("DISCORD_TOKEN")
-GUILD_ID = 123456789012345678  # Fire Ads server ID
+GUILD_ID = 1068275031106387968  # Fire Ads server ID
 BACKEND_URL = "https://fireboard-5npd.onrender.com/api/ads"  # Your backend endpoint
 OPTOUT_FILE = "optout.json"
 
