@@ -5,7 +5,10 @@ import json
 import os
 from flask import Flask
 from threading import Thread
+from flask_cors import CORS
 
+app = Flask(__name__)
+CORS(app, origins=["https://fireboard.infy.uk"])  # or origins="*" to allow all
 # ----- Keep-alive web server -----
 app = Flask('')
 
