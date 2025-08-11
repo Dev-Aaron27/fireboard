@@ -4,10 +4,53 @@ import aiohttp
 import json
 import os
 import threading
+from flask import Flask, request, jsonify
+from flask_cors import CORS
 
-TOKEN = os.getenv("DISCORD_TOKEN")  # Your bot token here
-GUILD_ID = 1068275031106387968  # Fire Ads server ID
-BACKEND_URL = "http://localhost:8080/api/ads"  # Your backend URL (change if deployed)
+# --- Backend Setup ---
+
+app = Flask(__name__)
+CORS(app, origins=["*"])  # Allow your frontend origin here instead of "*"
+
+ADS_FILE = "ads.json"
+
+if os.path.exists(ADS_FILE):
+    with open(ADS_FILE, "r") as f:
+        ads = json.load(f)
+else:
+    ads = []
+
+@app.route("/")
+def home():
+    return "Fire Board backend running"
+
+@app.route("/api/ads", methods=["GET", "POST"])
+def ads_route():
+    global ads
+    if request.method == "POST":
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "No data sent"}), 400
+
+        # Optional: Add validation here for keys, values, etc.
+
+        ads.append(data)
+        with open(ADS_FILE, "w") as f:
+            json.dump(ads, f, indent=4)
+
+        return jsonify({"status": "success"}), 200
+
+    else:  # GET
+        return jsonify(ads), 200
+
+def run_flask():
+    app.run(host="0.0.0.0", port=8080)
+
+# --- Discord Bot Setup ---
+
+TOKEN = os.getenv("DISCORD_TOKEN")
+GUILD_ID = 1068275031106387968  # Your Fire Ads server ID
+BACKEND_URL = "http://localhost:8080/api/ads"  # Change to your deployed backend URL
 
 OPTOUT_FILE = "optout.json"
 
@@ -16,7 +59,7 @@ CATEGORY_MAP = {
     1280616873305571463: "Partners",
     1392814387454283838: "Everything",
     1396951878691983510: "Discord",
-    1396951925353611264: "2h",
+    139695192535361264: "2h",
     1396951972074225664: "6h",
     1392810834648105083: "Socials",
     1396952374081355786: "Looking For",
@@ -32,7 +75,6 @@ intents.message_content = True
 
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-# Load opt-out list or create empty
 if os.path.exists(OPTOUT_FILE):
     with open(OPTOUT_FILE, "r") as f:
         optout_list = json.load(f)
@@ -66,12 +108,11 @@ async def optin(ctx):
 @bot.event
 async def on_message(message: discord.Message):
     if message.author.bot:
-        return  # Ignore bots entirely
+        return
     if message.guild is None or message.guild.id != GUILD_ID:
         return
     if message.author.id in optout_list:
         return
-
     if not message.content.strip():
         return
     if not message.channel.category_id:
@@ -81,7 +122,6 @@ async def on_message(message: discord.Message):
     if not category_name:
         return
 
-    # Extract invite link if present
     invite_url = None
     if "discord.gg" in message.content or "discord.com/invite" in message.content:
         for word in message.content.split():
@@ -92,7 +132,7 @@ async def on_message(message: discord.Message):
         try:
             invite = await message.channel.create_invite(max_age=86400, max_uses=0)
             invite_url = str(invite)
-        except Exception:
+        except:
             invite_url = "No invite"
 
     payload = {
@@ -116,3 +156,6 @@ async def on_message(message: discord.Message):
 
     await bot.process_commands(message)
 
+if __name__ == "__main__":
+    threading.Thread(target=run_flask).start()
+    bot.run(TOKEN)
