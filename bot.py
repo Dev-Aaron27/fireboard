@@ -146,6 +146,13 @@ async def optin(ctx):
     else:
         await ctx.send("❌ You are already opted in.")
 
+async def try_react(message, emoji):
+    try:
+        await message.add_reaction(emoji)
+        print(f"Added reaction {emoji} to message {message.id}")
+    except Exception as e:
+        print(f"Failed to add reaction {emoji} to message {message.id}: {e}")
+
 @bot.event
 async def on_message(message: discord.Message):
     if message.author.bot:
@@ -176,6 +183,7 @@ async def on_message(message: discord.Message):
             invite_url = str(invite)
         except Exception as e:
             invite_url = "No invite"
+            print(f"Failed to create invite: {e}")
 
     payload = {
         "server_name": message.guild.name,
@@ -193,20 +201,18 @@ async def on_message(message: discord.Message):
                     resp_json = await resp.json()
                     status = resp_json.get("status")
                     if status == "success":
-                        await message.add_reaction("✅")  # Tracked successfully
-                        print(f"Tracked ad from {message.author} in {category_name}")
+                        await try_react(message, "✅")  # Tracked successfully
                     elif status == "duplicate":
-                        await message.add_reaction("📊")  # Already tracked
-                        print(f"Duplicate ad from {message.author} in {category_name}")
+                        await try_react(message, "📊")  # Already tracked
                     else:
-                        await message.add_reaction("❌")  # Unknown response
+                        await try_react(message, "❌")  # Unknown response
                         print(f"Unexpected response status: {status}")
                 else:
-                    await message.add_reaction("❌")  # Failed HTTP request
+                    await try_react(message, "❌")  # Failed HTTP request
                     text = await resp.text()
                     print(f"Failed to send ad: HTTP {resp.status}, Response: {text}")
         except Exception as e:
-            await message.add_reaction("❌")  # Exception sending ad
+            await try_react(message, "❌")  # Exception sending ad
             print(f"Exception sending ad: {e}")
 
     await bot.process_commands(message)
