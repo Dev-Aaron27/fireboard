@@ -14,7 +14,7 @@ app = Flask(__name__)
 CORS(app, origins=["https://fireboard.infy.uk"])  # Adjust your frontend URL
 
 # MongoDB setup
-MONGO_URI = os.getenv("MONGO_URI")  # Your MongoDB connection string
+MONGO_URI = "mongodb+srv://admin:KabjFL6qQ9Ya8W39@cluster0.0xzfpwa.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
 mongo_client = MongoClient(MONGO_URI)
 
 try:
