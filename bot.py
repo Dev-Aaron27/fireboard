@@ -155,19 +155,28 @@ async def try_react(message, emoji):
 
 @bot.event
 async def on_message(message: discord.Message):
+    print(f"[DEBUG] Received message from {message.author} in channel {message.channel} (guild {message.guild})")
+
     if message.author.bot:
+        print("[DEBUG] Ignored: message author is a bot")
         return
     if message.guild is None or message.guild.id != GUILD_ID:
+        print(f"[DEBUG] Ignored: guild ID {getattr(message.guild, 'id', None)} != expected {GUILD_ID}")
         return
     if message.author.id in optout_list:
+        print(f"[DEBUG] Ignored: author {message.author.id} is opted out")
         return
     if not message.content.strip():
+        print("[DEBUG] Ignored: message content is empty or whitespace")
         return
     if not message.channel.category_id:
+        print("[DEBUG] Ignored: message channel has no category")
         return
 
     category_name = CATEGORY_MAP.get(message.channel.category_id)
+    print(f"[DEBUG] Channel category ID: {message.channel.category_id} maps to category: {category_name}")
     if not category_name:
+        print("[DEBUG] Ignored: category not in CATEGORY_MAP")
         await bot.process_commands(message)
         return
 
@@ -181,9 +190,10 @@ async def on_message(message: discord.Message):
         try:
             invite = await message.channel.create_invite(max_age=86400, max_uses=0, unique=True)
             invite_url = str(invite)
+            print(f"[DEBUG] Created invite URL: {invite_url}")
         except Exception as e:
             invite_url = "No invite"
-            print(f"Failed to create invite: {e}")
+            print(f"[DEBUG] Failed to create invite: {e}")
 
     payload = {
         "server_name": message.guild.name,
@@ -194,26 +204,30 @@ async def on_message(message: discord.Message):
         "author_id": message.author.id
     }
 
+    print(f"[DEBUG] Payload prepared: {payload}")
+
     async with aiohttp.ClientSession() as session:
         try:
             async with session.post(BACKEND_URL, json=payload) as resp:
+                print(f"[DEBUG] POST to backend returned status {resp.status}")
                 if resp.status == 200:
                     resp_json = await resp.json()
                     status = resp_json.get("status")
+                    print(f"[DEBUG] Backend response status: {status}")
                     if status == "success":
                         await try_react(message, "✅")  # Tracked successfully
                     elif status == "duplicate":
                         await try_react(message, "📊")  # Already tracked
                     else:
                         await try_react(message, "❌")  # Unknown response
-                        print(f"Unexpected response status: {status}")
+                        print(f"[DEBUG] Unexpected response status: {status}")
                 else:
                     await try_react(message, "❌")  # Failed HTTP request
                     text = await resp.text()
-                    print(f"Failed to send ad: HTTP {resp.status}, Response: {text}")
+                    print(f"[DEBUG] Failed to send ad: HTTP {resp.status}, Response: {text}")
         except Exception as e:
             await try_react(message, "❌")  # Exception sending ad
-            print(f"Exception sending ad: {e}")
+            print(f"[DEBUG] Exception sending ad: {e}")
 
     await bot.process_commands(message)
 
