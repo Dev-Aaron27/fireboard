@@ -4,54 +4,17 @@ import aiohttp
 import json
 import os
 import threading
-from flask import Flask, request, jsonify
+from flask import Flask
 from flask_cors import CORS
 
-# --- Backend Setup ---
+# Backend settings
+BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8080/api/ads")
 
-app = Flask(__name__)
-CORS(app, origins=["*"])  # Allow your frontend origin here instead of "*"
-
-ADS_FILE = "ads.json"
-
-if os.path.exists(ADS_FILE):
-    with open(ADS_FILE, "r") as f:
-        ads = json.load(f)
-else:
-    ads = []
-
-@app.route("/")
-def home():
-    return "Fire Board backend running"
-
-@app.route("/api/ads", methods=["GET", "POST"])
-def ads_route():
-    global ads
-    if request.method == "POST":
-        data = request.get_json()
-        if not data:
-            return jsonify({"error": "No data sent"}), 400
-
-        # Optional: Add validation here for keys, values, etc.
-
-        ads.append(data)
-        with open(ADS_FILE, "w") as f:
-            json.dump(ads, f, indent=4)
-
-        return jsonify({"status": "success"}), 200
-
-    else:  # GET
-        return jsonify(ads), 200
-
-def run_flask():
-    app.run(host="0.0.0.0", port=8080)
-
-# --- Discord Bot Setup ---
-
+# Discord bot settings
 TOKEN = os.getenv("DISCORD_TOKEN")
-GUILD_ID = 1068275031106387968  # Your Fire Ads server ID
-BACKEND_URL = "http://localhost:8080/api/ads"  # Change to your deployed backend URL
+GUILD_ID = 1068275031106387968  # Fire Ads server ID
 
+# Opt-out storage file
 OPTOUT_FILE = "optout.json"
 
 CATEGORY_MAP = {
@@ -59,7 +22,7 @@ CATEGORY_MAP = {
     1280616873305571463: "Partners",
     1392814387454283838: "Everything",
     1396951878691983510: "Discord",
-    1396951925353611264: "2h",            # FIXED THIS ID
+    1396951925353611264: "2h",
     1396951972074225664: "6h",
     1392810834648105083: "Socials",
     1396952374081355786: "Looking For",
@@ -75,6 +38,7 @@ intents.message_content = True
 
 bot = commands.Bot(command_prefix="!", intents=intents)
 
+# Load or create opt-out list
 if os.path.exists(OPTOUT_FILE):
     with open(OPTOUT_FILE, "r") as f:
         optout_list = json.load(f)
@@ -106,33 +70,34 @@ async def optin(ctx):
         await ctx.send("❌ You are already opted in.")
 
 @bot.event
-async def on_message(message: discord.Message):
+async def on_message(message):
     if message.author.bot:
-        return
+        return  # Ignore bots
     if message.guild is None or message.guild.id != GUILD_ID:
-        return
+        return  # Only track in Fire Ads server
     if message.author.id in optout_list:
-        return
+        return  # Skip opted out users
     if not message.content.strip():
-        return
+        return  # Ignore empty messages
     if not message.channel.category_id:
-        return
+        return  # Ignore if no category
 
     category_name = CATEGORY_MAP.get(message.channel.category_id)
     if not category_name:
-        return
+        return  # Ignore if category not tracked
 
+    # Extract invite URL from message content if present
     invite_url = None
-    if "discord.gg" in message.content or "discord.com/invite" in message.content:
-        for word in message.content.split():
-            if "discord.gg" in word or "discord.com/invite" in word:
-                invite_url = word
-                break
-    else:
+    for word in message.content.split():
+        if "discord.gg" in word or "discord.com/invite" in word:
+            invite_url = word
+            break
+    if invite_url is None:
+        # Try to create invite if not present in content
         try:
             invite = await message.channel.create_invite(max_age=86400, max_uses=0)
             invite_url = str(invite)
-        except:
+        except Exception:
             invite_url = "No invite"
 
     payload = {
@@ -150,12 +115,12 @@ async def on_message(message: discord.Message):
                 if resp.status == 200:
                     print(f"✅ Sent ad from {message.author} in {category_name}")
                 else:
-                    print(f"⚠️ Failed to send ad: {resp.status}")
+                    print(f"⚠️ Failed to send ad: HTTP {resp.status}")
         except Exception as e:
             print(f"❌ Error sending ad: {e}")
 
     await bot.process_commands(message)
 
+
 if __name__ == "__main__":
-    threading.Thread(target=run_flask).start()
     bot.run(TOKEN)
