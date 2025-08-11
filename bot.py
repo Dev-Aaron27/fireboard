@@ -4,17 +4,55 @@ import aiohttp
 import json
 import os
 import threading
-from flask import Flask
+from flask import Flask, request, jsonify
 from flask_cors import CORS
 
-# Backend settings
-BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8080/api/ads")
+# --- Backend Setup ---
 
-# Discord bot settings
+app = Flask(__name__)
+CORS(app, origins=["https://fireboard.infy.uk"])  # or origins="*" to allow all
+
+ADS_FILE = "ads.json"
+
+if os.path.exists(ADS_FILE):
+    with open(ADS_FILE, "r") as f:
+        ads = json.load(f)
+else:
+    ads = []
+
+@app.route("/")
+def home():
+    return "Fire Board backend running"
+
+@app.route("/api/ads", methods=["GET", "POST"])
+def ads_route():
+    global ads
+    if request.method == "POST":
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "No data sent"}), 400
+
+        # Prevent duplicates: you can add more advanced checks here
+        if data not in ads:
+            ads.append(data)
+            with open(ADS_FILE, "w") as f:
+                json.dump(ads, f, indent=4)
+
+        return jsonify({"status": "success"}), 200
+
+    else:  # GET
+        return jsonify(ads), 200
+
+def run_flask():
+    port = int(os.environ.get("PORT", 8080))
+    app.run(host="0.0.0.0", port=port)
+
+# --- Discord Bot Setup ---
+
 TOKEN = os.getenv("DISCORD_TOKEN")
 GUILD_ID = 1068275031106387968  # Fire Ads server ID
+BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8080/api/ads")
 
-# Opt-out storage file
 OPTOUT_FILE = "optout.json"
 
 CATEGORY_MAP = {
@@ -38,7 +76,6 @@ intents.message_content = True
 
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-# Load or create opt-out list
 if os.path.exists(OPTOUT_FILE):
     with open(OPTOUT_FILE, "r") as f:
         optout_list = json.load(f)
@@ -70,30 +107,29 @@ async def optin(ctx):
         await ctx.send("❌ You are already opted in.")
 
 @bot.event
-async def on_message(message):
+async def on_message(message: discord.Message):
     if message.author.bot:
-        return  # Ignore bots
+        return
     if message.guild is None or message.guild.id != GUILD_ID:
-        return  # Only track in Fire Ads server
+        return
     if message.author.id in optout_list:
-        return  # Skip opted out users
+        return
     if not message.content.strip():
-        return  # Ignore empty messages
+        return
     if not message.channel.category_id:
-        return  # Ignore if no category
+        return
 
     category_name = CATEGORY_MAP.get(message.channel.category_id)
     if not category_name:
-        return  # Ignore if category not tracked
+        return
 
-    # Extract invite URL from message content if present
     invite_url = None
-    for word in message.content.split():
-        if "discord.gg" in word or "discord.com/invite" in word:
-            invite_url = word
-            break
-    if invite_url is None:
-        # Try to create invite if not present in content
+    if "discord.gg" in message.content or "discord.com/invite" in message.content:
+        for word in message.content.split():
+            if "discord.gg" in word or "discord.com/invite" in word:
+                invite_url = word
+                break
+    else:
         try:
             invite = await message.channel.create_invite(max_age=86400, max_uses=0)
             invite_url = str(invite)
@@ -115,12 +151,12 @@ async def on_message(message):
                 if resp.status == 200:
                     print(f"✅ Sent ad from {message.author} in {category_name}")
                 else:
-                    print(f"⚠️ Failed to send ad: HTTP {resp.status}")
+                    print(f"⚠️ Failed to send ad: {resp.status}")
         except Exception as e:
             print(f"❌ Error sending ad: {e}")
 
     await bot.process_commands(message)
 
-
 if __name__ == "__main__":
+    threading.Thread(target=run_flask).start()
     bot.run(TOKEN)
