@@ -37,22 +37,35 @@ def ads_route():
     if request.method == "POST":
         data = request.get_json()
         if not data:
+            print("No data received in POST")
             return jsonify({"error": "No data sent"}), 400
 
-        # Deduplication: check if ad with same author_id and timestamp exists
-        exists = ads_collection.find_one({
-            "author_id": data.get("author_id"),
-            "timestamp": data.get("timestamp")
-        })
-        if not exists:
-            ads_collection.insert_one(data)
-            return jsonify({"status": "success"}), 200
-        else:
-            return jsonify({"status": "duplicate"}), 200
+        print(f"Received ad data: {data}")
 
-    else:  # GET
-        ads = list(ads_collection.find({}, {'_id': False}))
-        return jsonify(ads), 200
+        try:
+            exists = ads_collection.find_one({
+                "author_id": data.get("author_id"),
+                "timestamp": data.get("timestamp")
+            })
+            if not exists:
+                result = ads_collection.insert_one(data)
+                print(f"Inserted ad with ID: {result.inserted_id}")
+                return jsonify({"status": "success"}), 200
+            else:
+                print("Duplicate ad, not inserting.")
+                return jsonify({"status": "duplicate"}), 200
+        except Exception as e:
+            print(f"Error inserting ad: {e}")
+            return jsonify({"error": "Database insert failed"}), 500
+
+    else:
+        try:
+            ads = list(ads_collection.find({}, {'_id': False}))
+            print(f"Fetched {len(ads)} ads from DB")
+            return jsonify(ads), 200
+        except Exception as e:
+            print(f"Error fetching ads: {e}")
+            return jsonify({"error": "Database fetch failed"}), 500
 
 def run_flask():
     port = int(os.environ.get("PORT", 8080))
@@ -62,6 +75,8 @@ def run_flask():
 
 TOKEN = os.getenv("DISCORD_TOKEN")
 GUILD_ID = 1068275031106387968  # Your Fire Ads server ID
+
+# Make sure BACKEND_URL is reachable from bot
 BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8080/api/ads")
 
 OPTOUT_FILE = "optout.json"
@@ -72,7 +87,7 @@ CATEGORY_MAP = {
     1392814387454283838: "Everything",
     1396951878691983510: "Discord",
     1396951925353611264: "2h",
-    1396951972074225664: "6h",
+    139695197207422564: "6h",
     1392810834648105083: "Socials",
     1396952374081355786: "Looking For",
     1280616481998246012: "Level 15",
