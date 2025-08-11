@@ -7,20 +7,21 @@ from flask import Flask
 from threading import Thread
 from flask_cors import CORS
 
-app = Flask(__name__)
-CORS(app, origins=["https://fireboard.infy.uk"])  # or origins="*" to allow all
 # ----- Keep-alive web server -----
-app = Flask('')
+app = Flask(__name__)
+CORS(app, origins=["https://fireboard.infy.uk"])  # Allow your frontend domain
 
 @app.route('/')
 def home():
     return "Fire Board bot is running!"
 
 def run_webserver():
+    # Use port 8080 (adjust if your hosting requires a different port)
     app.run(host='0.0.0.0', port=8080)
 
 def keep_alive():
     t = Thread(target=run_webserver)
+    t.daemon = True  # So it exits when main program exits
     t.start()
 
 # ----- Discord bot setup -----
@@ -104,7 +105,7 @@ async def on_message(message: discord.Message):
     if not category_name:
         return
 
-    # Get invite link
+    # Get invite link from message or create one
     invite_url = None
     if "discord.gg" in message.content or "discord.com/invite" in message.content:
         for word in message.content.split():
