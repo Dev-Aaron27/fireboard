@@ -3,7 +3,24 @@ from discord.ext import commands
 import aiohttp
 import json
 import os
+from flask import Flask
+from threading import Thread
 
+# ----- Keep-alive web server -----
+app = Flask('')
+
+@app.route('/')
+def home():
+    return "Fire Board bot is running!"
+
+def run_webserver():
+    app.run(host='0.0.0.0', port=8080)
+
+def keep_alive():
+    t = Thread(target=run_webserver)
+    t.start()
+
+# ----- Discord bot setup -----
 TOKEN = os.getenv("DISCORD_TOKEN")
 GUILD_ID = 1068275031106387968  # Fire Ads server ID
 BACKEND_URL = "https://fireboard-5npd.onrender.com/api/ads"  # Your backend endpoint
@@ -119,6 +136,6 @@ async def on_message(message: discord.Message):
 
     await bot.process_commands(message)
 
-bot.run(TOKEN)
-
-
+if __name__ == "__main__":
+    keep_alive()
+    bot.run(TOKEN)
