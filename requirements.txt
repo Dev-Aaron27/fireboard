@@ -3,3 +3,4 @@ aiohttp
 flask
 flask_cors
 pymongo
+certifi
