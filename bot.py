@@ -148,6 +148,7 @@ async def optin(ctx):
 
 @bot.event
 async def on_message(message: discord.Message):
+    # Ignore bots, DMs, wrong guild, opted-out users, empty messages, or channels without category
     if message.author.bot:
         return
     if message.guild is None or message.guild.id != GUILD_ID:
@@ -161,41 +162,50 @@ async def on_message(message: discord.Message):
 
     category_name = CATEGORY_MAP.get(message.channel.category_id)
     if not category_name:
+        print(f"Category ID {message.channel.category_id} not in CATEGORY_MAP, ignoring message.")
+        await bot.process_commands(message)
         return
 
+    # Extract invite URL if present in message
     invite_url = None
-    if "discord.gg" in message.content or "discord.com/invite" in message.content:
-        for word in message.content.split():
-            if "discord.gg" in word or "discord.com/invite" in word:
-                invite_url = word
-                break
-    else:
+    for word in message.content.split():
+        if "discord.gg" in word or "discord.com/invite" in word:
+            invite_url = word
+            break
+
+    # If no invite URL in content, create a temporary invite
+    if not invite_url:
         try:
-            invite = await message.channel.create_invite(max_age=86400, max_uses=0)
+            invite = await message.channel.create_invite(max_age=86400, max_uses=0, unique=True)
             invite_url = str(invite)
-        except Exception:
-            invite_url = "No invite"
+        except Exception as e:
+            print(f"Failed to create invite: {e}")
+            invite_url = None
 
     payload = {
         "server_name": message.guild.name,
         "category": category_name,
         "content": message.content,
-        "invite": invite_url,
+        "invite": invite_url or "No invite",
         "timestamp": message.created_at.isoformat(),
         "author_id": message.author.id
     }
 
+    print(f"Sending ad payload: {payload}")
+
     async with aiohttp.ClientSession() as session:
         try:
             async with session.post(BACKEND_URL, json=payload) as resp:
+                text = await resp.text()
                 if resp.status == 200:
-                    print(f"✅ Sent ad from {message.author} in {category_name}")
+                    print(f"✅ Successfully sent ad from {message.author} in {category_name}")
                 else:
-                    print(f"⚠️ Failed to send ad: {resp.status}")
+                    print(f"⚠️ Failed to send ad: HTTP {resp.status}, Response: {text}")
         except Exception as e:
-            print(f"❌ Error sending ad: {e}")
+            print(f"❌ Exception sending ad: {e}")
 
     await bot.process_commands(message)
+
 
 if __name__ == "__main__":
     threading.Thread(target=run_flask).start()
