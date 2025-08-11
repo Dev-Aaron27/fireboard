@@ -42,23 +42,32 @@ def ads_route():
 
         print(f"Received ad data: {data}")
 
+        # Validate required fields (optional but recommended)
+        required_fields = ["author_id", "timestamp", "content", "server_name", "category"]
+        missing = [field for field in required_fields if field not in data]
+        if missing:
+            print(f"Missing fields in POST data: {missing}")
+            return jsonify({"error": f"Missing fields: {missing}"}), 400
+
         try:
+            # Check for duplicate by author_id + timestamp
             exists = ads_collection.find_one({
                 "author_id": data.get("author_id"),
                 "timestamp": data.get("timestamp")
             })
-            if not exists:
-                result = ads_collection.insert_one(data)
-                print(f"Inserted ad with ID: {result.inserted_id}")
-                return jsonify({"status": "success"}), 200
-            else:
+            if exists:
                 print("Duplicate ad, not inserting.")
                 return jsonify({"status": "duplicate"}), 200
+
+            # Insert new ad
+            result = ads_collection.insert_one(data)
+            print(f"Inserted ad with ID: {result.inserted_id}")
+            return jsonify({"status": "success"}), 200
         except Exception as e:
             print(f"Error inserting ad: {e}")
             return jsonify({"error": "Database insert failed"}), 500
 
-    else:
+    else:  # GET
         try:
             ads = list(ads_collection.find({}, {'_id': False}))
             print(f"Fetched {len(ads)} ads from DB")
@@ -66,6 +75,7 @@ def ads_route():
         except Exception as e:
             print(f"Error fetching ads: {e}")
             return jsonify({"error": "Database fetch failed"}), 500
+
 
 def run_flask():
     port = int(os.environ.get("PORT", 8080))
