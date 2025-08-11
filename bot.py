@@ -7,15 +7,17 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 from pymongo import MongoClient
 from pymongo.errors import ConnectionFailure
+import certifi
+import json
 
 # --- Backend Setup ---
 
 app = Flask(__name__)
 CORS(app, origins=["https://fireboard.infy.uk"])  # Adjust your frontend URL
 
-# MongoDB setup
+# MongoDB setup with certifi to handle TLS CA certificates properly
 MONGO_URI = "mongodb+srv://admin:KabjFL6qQ9Ya8W39@cluster0.0xzfpwa.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
-mongo_client = MongoClient(MONGO_URI)
+mongo_client = MongoClient(MONGO_URI, tls=True, tlsCAFile=certifi.where())
 
 try:
     mongo_client.admin.command('ping')
@@ -86,7 +88,6 @@ intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 # Load optout list or start empty
-import json
 if os.path.exists(OPTOUT_FILE):
     try:
         with open(OPTOUT_FILE, "r") as f:
