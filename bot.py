@@ -215,18 +215,18 @@ async def on_message(message: discord.Message):
                     status = resp_json.get("status")
                     print(f"[DEBUG] Backend response status: {status}")
                     if status == "success":
-                        await try_react(message, "✅")  # Tracked successfully
+                        await try_react(message, "✅")
                     elif status == "duplicate":
-                        await try_react(message, "📊")  # Already tracked
+                        await try_react(message, "📊")
                     else:
-                        await try_react(message, "❌")  # Unknown response
+                        await try_react(message, "❌")
                         print(f"[DEBUG] Unexpected response status: {status}")
                 else:
-                    await try_react(message, "❌")  # Failed HTTP request
+                    await try_react(message, "❌")
                     text = await resp.text()
                     print(f"[DEBUG] Failed to send ad: HTTP {resp.status}, Response: {text}")
         except Exception as e:
-            await try_react(message, "❌")  # Exception sending ad
+            await try_react(message, "❌")
             print(f"[DEBUG] Exception sending ad: {e}")
 
     await bot.process_commands(message)
