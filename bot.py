@@ -1,3 +1,7 @@
+
+python
+Copy
+Edit
 import discord
 from discord.ext import commands
 import aiohttp
@@ -10,13 +14,21 @@ from flask_cors import CORS
 # --- Backend Setup ---
 
 app = Flask(__name__)
-CORS(app, origins=["https://fireboard.infy.uk"])  # or origins="*" to allow all
+CORS(app, origins=["https://fireboard.infy.uk"])  # Adjust your frontend URL
 
 ADS_FILE = "ads.json"
 
+# Load existing ads or initialize empty list
 if os.path.exists(ADS_FILE):
-    with open(ADS_FILE, "r") as f:
-        ads = json.load(f)
+    try:
+        with open(ADS_FILE, "r") as f:
+            ads = json.load(f)
+            if not isinstance(ads, list):
+                print("ads.json corrupted, resetting ads list")
+                ads = []
+    except Exception:
+        print("Failed to load ads.json, starting fresh")
+        ads = []
 else:
     ads = []
 
@@ -32,8 +44,8 @@ def ads_route():
         if not data:
             return jsonify({"error": "No data sent"}), 400
 
-        # Prevent duplicates: you can add more advanced checks here
-        if data not in ads:
+        # Basic deduplication based on author_id and timestamp
+        if not any(ad.get("author_id") == data.get("author_id") and ad.get("timestamp") == data.get("timestamp") for ad in ads):
             ads.append(data)
             with open(ADS_FILE, "w") as f:
                 json.dump(ads, f, indent=4)
@@ -50,7 +62,7 @@ def run_flask():
 # --- Discord Bot Setup ---
 
 TOKEN = os.getenv("DISCORD_TOKEN")
-GUILD_ID = 1068275031106387968  # Fire Ads server ID
+GUILD_ID = 1068275031106387968  # Your Fire Ads server ID
 BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8080/api/ads")
 
 OPTOUT_FILE = "optout.json"
@@ -76,9 +88,13 @@ intents.message_content = True
 
 bot = commands.Bot(command_prefix="!", intents=intents)
 
+# Load optout list or start empty
 if os.path.exists(OPTOUT_FILE):
-    with open(OPTOUT_FILE, "r") as f:
-        optout_list = json.load(f)
+    try:
+        with open(OPTOUT_FILE, "r") as f:
+            optout_list = json.load(f)
+    except Exception:
+        optout_list = []
 else:
     optout_list = []
 
