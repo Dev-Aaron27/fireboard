@@ -148,7 +148,6 @@ async def optin(ctx):
 
 @bot.event
 async def on_message(message: discord.Message):
-    # Ignore bots, DMs, wrong guild, opted-out users, empty messages, or channels without category
     if message.author.bot:
         return
     if message.guild is None or message.guild.id != GUILD_ID:
@@ -162,25 +161,21 @@ async def on_message(message: discord.Message):
 
     category_name = CATEGORY_MAP.get(message.channel.category_id)
     if not category_name:
-        print(f"Category ID {message.channel.category_id} not in CATEGORY_MAP, ignoring message.")
         await bot.process_commands(message)
         return
 
-    # Extract invite URL if present in message
     invite_url = None
     for word in message.content.split():
         if "discord.gg" in word or "discord.com/invite" in word:
             invite_url = word
             break
 
-    # If no invite URL in content, create a temporary invite
     if not invite_url:
         try:
             invite = await message.channel.create_invite(max_age=86400, max_uses=0, unique=True)
             invite_url = str(invite)
         except Exception as e:
-            print(f"Failed to create invite: {e}")
-            invite_url = None
+            invite_url = "No invite"
 
     payload = {
         "server_name": message.guild.name,
@@ -191,18 +186,28 @@ async def on_message(message: discord.Message):
         "author_id": message.author.id
     }
 
-    print(f"Sending ad payload: {payload}")
-
     async with aiohttp.ClientSession() as session:
         try:
             async with session.post(BACKEND_URL, json=payload) as resp:
-                text = await resp.text()
                 if resp.status == 200:
-                    print(f"✅ Successfully sent ad from {message.author} in {category_name}")
+                    resp_json = await resp.json()
+                    status = resp_json.get("status")
+                    if status == "success":
+                        await message.add_reaction("✅")  # Tracked successfully
+                        print(f"Tracked ad from {message.author} in {category_name}")
+                    elif status == "duplicate":
+                        await message.add_reaction("📊")  # Already tracked
+                        print(f"Duplicate ad from {message.author} in {category_name}")
+                    else:
+                        await message.add_reaction("❌")  # Unknown response
+                        print(f"Unexpected response status: {status}")
                 else:
-                    print(f"⚠️ Failed to send ad: HTTP {resp.status}, Response: {text}")
+                    await message.add_reaction("❌")  # Failed HTTP request
+                    text = await resp.text()
+                    print(f"Failed to send ad: HTTP {resp.status}, Response: {text}")
         except Exception as e:
-            print(f"❌ Exception sending ad: {e}")
+            await message.add_reaction("❌")  # Exception sending ad
+            print(f"Exception sending ad: {e}")
 
     await bot.process_commands(message)
 
